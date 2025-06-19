@@ -1,278 +1,103 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set } from 'firebase/database';
-
-function App() {
-  const [db, setDb] = useState(null);
-  const [countryData, setCountryData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // State variables for input fields
-  const [populationInput, setPopulationInput] = useState('');
-  const [moneyInput, setMoneyInput] = useState('');
-  const [woodInput, setWoodInput] = useState('');
-  const [stoneInput, setStoneInput] = useState('');
-  const [soldiersInput, setSoldiersInput] = useState('');
-
-  // Firebase configuration and initialization
-  useEffect(() => {
-    try {
-      // The __firebase_config global variable is provided by the Canvas environment.
-      // It contains the Firebase project configuration.
-      const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-
-      // Check if the databaseURL is provided by the user and update the config
-      const userDbUrl = "https://montana-5b6a2-default-rtdb.europe-west1.firebasedatabase.app/";
-      if (userDbUrl) {
-        firebaseConfig.databaseURL = userDbUrl;
-      }
-
-      const app = initializeApp(firebaseConfig);
-      const database = getDatabase(app);
-      setDb(database);
-      console.log("Firebase initialized successfully.");
-    } catch (e) {
-      console.error("Error initializing Firebase:", e);
-      setError("Impossible d'initialiser Firebase. Vérifiez la configuration.");
-      setLoading(false);
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Gestion du Montana - Nation Glory</title>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
     }
-  }, []);
-
-  // Listen for real-time updates from Firebase
-  useEffect(() => {
-    if (db) {
-      const countryRef = ref(db, 'montana'); // Path to your country data
-
-      const unsubscribe = onValue(countryRef, (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.val();
-          setCountryData(data);
-          // Set input fields to current data for editing
-          setPopulationInput(data.population !== undefined ? data.population.toString() : '');
-          setMoneyInput(data.money !== undefined ? data.money.toString() : '');
-          setWoodInput(data.resources?.wood !== undefined ? data.resources.wood.toString() : '');
-          setStoneInput(data.resources?.stone !== undefined ? data.resources.stone.toString() : '');
-          setSoldiersInput(data.military?.soldiers !== undefined ? data.military.soldiers.toString() : '');
-          console.log("Data fetched successfully:", data);
-        } else {
-          setCountryData(null);
-          console.log("No data available for 'montana'.");
-        }
-        setLoading(false);
-      }, (error) => {
-        console.error("Error fetching data:", error);
-        if (error.code === 'PERMISSION_DENIED') {
-          setError("Erreur de permission : Assurez-vous que les règles de sécurité de votre base de données Firebase Realtime Database permettent la lecture et l'écriture. Dans la console Firebase, allez dans Database > Realtime Database > Règles, et définissez .read et .write à 'true' pour le développement.");
-        } else {
-          setError("Impossible de charger les données. Vérifiez votre connexion.");
-        }
-        setLoading(false);
-      });
-
-      // Cleanup subscription on component unmount
-      return () => unsubscribe();
+    h1 {
+      color: #2d2d2d;
     }
-  }, [db]);
-
-  // Function to update data in Firebase
-  const updateCountryData = useCallback(async () => {
-    if (!db) {
-      setError("Base de données non initialisée.");
-      return;
+    .section {
+      background: white;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
+  </style>
+</head>
+<body>
 
-    setLoading(true);
-    setError(null);
+<h1>Gestion du Montana 🇺🇸</h1>
 
-    const updatedData = {
-      population: parseInt(populationInput) || 0,
-      money: parseInt(moneyInput) || 0,
-      resources: {
-        wood: parseInt(woodInput) || 0,
-        stone: parseInt(stoneInput) || 0,
-      },
-      military: {
-        soldiers: parseInt(soldiersInput) || 0,
-      },
-    };
+<div class="section">
+  <h2>Ressources</h2>
+  <ul id="ressourcesList"></ul>
+  <form id="ressourceForm">
+    <input type="text" id="ressourceNom" placeholder="Ressource (ex: fer)" required>
+    <input type="number" id="ressourceQuantite" placeholder="Quantité" required>
+    <button type="submit">Ajouter / Modifier</button>
+  </form>
+</div>
 
-    try {
-      await set(ref(db, 'montana'), updatedData);
-      console.log("Data updated successfully.");
-      setLoading(false);
-    } catch (e) {
-      console.error("Error updating data:", e);
-      if (e.code === 'PERMISSION_DENIED') {
-        setError("Erreur de permission : Assurez-vous que les règles de sécurité de votre base de données Firebase Realtime Database permettent la lecture et l'écriture. Dans la console Firebase, allez dans Database > Realtime Database > Règles, et définissez .read et .write à 'true' pour le développement.");
-      } else {
-        setError("Impossible de mettre à jour les données. Réessayez.");
-      }
-      setLoading(false);
+<div class="section">
+  <h2>Citoyens</h2>
+  <ul id="citoyensList"></ul>
+  <form id="citoyenForm">
+    <input type="text" id="citoyenNom" placeholder="Nom du citoyen" required>
+    <input type="text" id="citoyenRole" placeholder="Rôle (ex: Ministre)" required>
+    <button type="submit">Ajouter / Modifier</button>
+  </form>
+</div>
+
+<script>
+  // CONFIG FIREBASE
+  const firebaseConfig = {
+    databaseURL: "https://montana-5b6a2-default-rtdb.europe-west1.firebasedatabase.app/"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  // 🔄 Afficher les ressources
+  const ressourcesList = document.getElementById('ressourcesList');
+  db.ref('ressources').on('value', snapshot => {
+    ressourcesList.innerHTML = '';
+    const data = snapshot.val();
+    for (let key in data) {
+      const li = document.createElement('li');
+      li.textContent = `${key} : ${data[key]}`;
+      ressourcesList.appendChild(li);
     }
-  }, [db, populationInput, moneyInput, woodInput, stoneInput, soldiersInput]);
+  });
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
-        <p className="text-xl text-gray-700">Chargement des données du Montana...</p>
-      </div>
-    );
-  }
+  // 🔄 Afficher les citoyens
+  const citoyensList = document.getElementById('citoyensList');
+  db.ref('citoyens').on('value', snapshot => {
+    citoyensList.innerHTML = '';
+    const data = snapshot.val();
+    for (let key in data) {
+      const li = document.createElement('li');
+      li.textContent = `${key} - ${data[key]}`;
+      citoyensList.appendChild(li);
+    }
+  });
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-red-100 p-4 rounded-lg shadow-md">
-        <p className="text-red-700 text-lg">{error}</p>
-      </div>
-    );
-  }
+  // ➕ Ajouter une ressource
+  document.getElementById('ressourceForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const nom = document.getElementById('ressourceNom').value;
+    const quantite = parseInt(document.getElementById('ressourceQuantite').value);
+    db.ref('ressources/' + nom).set(quantite);
+    e.target.reset();
+  });
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-100 to-indigo-200 p-6 font-inter flex flex-col items-center">
-      <div className="bg-white rounded-2xl shadow-xl p-8 max-w-4xl w-full my-8">
-        <h1 className="text-4xl font-extrabold text-center text-gray-800 mb-6">
-          Gestion du Montana sur Nation Glory
-        </h1>
-        <p className="text-center text-gray-600 mb-8">
-          Affichez et mettez à jour les statistiques de votre pays en temps réel.
-        </p>
+  // ➕ Ajouter un citoyen
+  document.getElementById('citoyenForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const nom = document.getElementById('citoyenNom').value;
+    const role = document.getElementById('citoyenRole').value;
+    db.ref('citoyens/' + nom).set(role);
+    e.target.reset();
+  });
+</script>
 
-        {countryData ? (
-          <div>
-            {/* Current Statistics Section */}
-            <h2 className="text-2xl font-bold text-gray-700 mb-4 border-b-2 pb-2 border-indigo-300">
-              Statistiques actuelles
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              <StatCard label="Population" value={countryData.population} icon="🧑‍🤝‍🧑" />
-              <StatCard label="Argent" value={`${countryData.money}$`} icon="💰" />
-              <StatCard label="Bois" value={countryData.resources?.wood} icon="🪵" />
-              <StatCard label="Pierre" value={countryData.resources?.stone} icon="🪨" />
-              <StatCard label="Soldats" value={countryData.military?.soldiers} icon="🛡️" />
-            </div>
-
-            {/* Update Section */}
-            <h2 className="text-2xl font-bold text-gray-700 mb-4 border-b-2 pb-2 border-indigo-300">
-              Mettre à jour les données
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <InputField
-                label="Population"
-                type="number"
-                value={populationInput}
-                onChange={(e) => setPopulationInput(e.target.value)}
-              />
-              <InputField
-                label="Argent ($)"
-                type="number"
-                value={moneyInput}
-                onChange={(e) => setMoneyInput(e.target.value)}
-              />
-              <InputField
-                label="Bois"
-                type="number"
-                value={woodInput}
-                onChange={(e) => setWoodInput(e.target.value)}
-              />
-              <InputField
-                label="Pierre"
-                type="number"
-                value={stoneInput}
-                onChange={(e) => setStoneInput(e.target.value)}
-              />
-              <InputField
-                label="Soldats"
-                type="number"
-                value={soldiersInput}
-                onChange={(e) => setSoldiersInput(e.target.value)}
-              />
-            </div>
-            <button
-              onClick={updateCountryData}
-              className="w-full bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-indigo-700 transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-indigo-300"
-            >
-              Sauvegarder les modifications
-            </button>
-          </div>
-        ) : (
-          <div className="text-center text-gray-600">
-            <p className="text-xl mb-4">
-              Aucune donnée trouvée pour le Montana dans votre base de données.
-            </p>
-            <p className="mb-4">
-              Vous pouvez entrer des valeurs ci-dessous et les sauvegarder pour initialiser la base de données.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <InputField
-                label="Population"
-                type="number"
-                value={populationInput}
-                onChange={(e) => setPopulationInput(e.target.value)}
-              />
-              <InputField
-                label="Argent ($)"
-                type="number"
-                value={moneyInput}
-                onChange={(e) => setMoneyInput(e.target.value)}
-              />
-              <InputField
-                label="Bois"
-                type="number"
-                value={woodInput}
-                onChange={(e) => setWoodInput(e.target.value)}
-              />
-              <InputField
-                label="Pierre"
-                type="number"
-                value={stoneInput}
-                onChange={(e) => setStoneInput(e.target.value)}
-              />
-              <InputField
-                label="Soldats"
-                type="number"
-                value={soldiersInput}
-                onChange={(e) => setSoldiersInput(e.target.value)}
-              />
-            </div>
-            <button
-              onClick={updateCountryData}
-              className="w-full bg-green-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-green-700 transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-green-300"
-            >
-              Initialiser et sauvegarder
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Reusable StatCard component for displaying country statistics
-const StatCard = ({ label, value, icon }) => (
-  <div className="bg-blue-50 p-6 rounded-xl shadow-md flex items-center space-x-4 border border-blue-200">
-    <div className="text-4xl">{icon}</div>
-    <div>
-      <p className="text-lg font-medium text-gray-600">{label}</p>
-      <p className="text-3xl font-bold text-blue-700">{value !== undefined ? value : 'N/A'}</p>
-    </div>
-  </div>
-);
-
-// Reusable InputField component for update forms
-const InputField = ({ label, type, value, onChange }) => (
-  <div>
-    <label className="block text-gray-700 text-sm font-semibold mb-2">
-      {label}
-    </label>
-    <input
-      type={type}
-      value={value}
-      onChange={onChange}
-      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition duration-200 ease-in-out text-gray-800 text-lg"
-      placeholder={`Entrez la ${label.toLowerCase()}`}
-    />
-  </div>
-);
-
-export default App;
+</body>
+</html>
